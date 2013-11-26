@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import iris.quickplot as qplt
 import cartopy.crs as ccrs
 import iris
-
+import iris.plot as iplt
 
 #
 # {GRIB_ID: (standard_name, long_name, units)
@@ -42,7 +42,7 @@ standard_name_map = {
 
 param_rexp = re.compile(r'UNKNOWN LOCAL PARAM (\d+)\.(\d+)')
 
-def cast_callback(cube, field, filename):
+def _metadata_callback(cube, field, filename):
     match = param_rexp.match(cube.long_name)
     if match:
         parameter, table_version = (int(x) for x in match.groups())
@@ -57,8 +57,8 @@ def cast_callback(cube, field, filename):
 
 
 
-def load_cast_cubes(filename):
-    cubes = iris.load(filename, callback=cast_callback)
+def load_cubes(filename):
+    cubes = iris.load(filename, callback=_metadata_callback)
 
     return cubes
 
@@ -86,20 +86,20 @@ def plot_cube(cube, pressure_level=None):
         cslice = cube
         level = 'surface'
     
-    ax = plt.axes(projection=ccrs.PlateCarree())
-    ax.coastlines()
 
     #plot = qplt.contourf(cslice)
     #ax = plot.ax
-    #plt.suptitle('level: %s' % level)
 
+    ax = plt.axes([0.1, 0.1, 0.6, 0.6], projection=ccrs.PlateCarree())
+
+    ax.set_aspect('auto')
     ax.set_xlim(80, 240)
     ax.set_ylim(-40, 40)
-    ax.coastlines()
     ax.gridlines(draw_labels=True)
-    plot = plt.contourf(cslice, ax=ax)
+    ax.coastlines()
+    iplt.contourf(cslice, axes=ax)
 
     #!TODO: adjust viewport
-    
+    ax.autoscale(False)
 
-    return plot
+    return ax
