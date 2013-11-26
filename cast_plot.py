@@ -90,16 +90,17 @@ def plot_cube(cube, pressure_level=None):
     #plot = qplt.contourf(cslice)
     #ax = plot.ax
 
-    ax = plt.axes([0.1, 0.1, 0.6, 0.6], projection=ccrs.PlateCarree())
-
-    ax.set_aspect('auto')
-    ax.set_xlim(80, 240)
-    ax.set_ylim(-40, 40)
-    ax.gridlines(draw_labels=True)
+    ax_proj = ccrs.PlateCarree(central_longitude=180)
+    ax = plt.axes(projection=ax_proj)
     ax.coastlines()
+    ax.gridlines(draw_labels=True)
     iplt.contourf(cslice, axes=ax)
 
+    #ax.set_aspect('auto')
+    #ax.set_xlim(80, 240)
+    #ax.set_ylim(-40, 40)
+
     #!TODO: adjust viewport
-    ax.autoscale(False)
+
 
     return ax
