@@ -11,6 +11,9 @@ import iris.plot as iplt
 import matplotlib.ticker as mticker
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 
+import logging
+log = logging.getLogger(__name__)
+
 #
 # {GRIB_ID: (standard_name, long_name, units)
 #
@@ -43,6 +46,8 @@ standard_name_map = {
     228: (None, 'HUMIDITY TENDENCY BY LARGE SCALE CONDENSATION', 'kg kg-1'), # Humidity tendency by large-scale condensation, htlc, kg kg-1
 }
 
+
+
 param_rexp = re.compile(r'UNKNOWN LOCAL PARAM (\d+)\.(\d+)')
 
 def _metadata_callback(cube, field, filename):
@@ -72,6 +77,7 @@ def plot_and_save(cube, out_filename, pressure_level=None, format=None):
     # Reasonable values for balancing plot and colourbar
     fig.set_size_inches(10, 7)
     fig.savefig(out_filename, format=format)
+    log.info('Saving figure %s' % out_filename)
 
 
 def plot_cube(cube, pressure_level=None):
@@ -87,23 +93,25 @@ def plot_cube(cube, pressure_level=None):
 
     # Select slice
     if is_3d:
+        p = cube.coord('pressure')
         if pressure_level:
-            p = cube.coord('pressure')
             cslice = cube.subset(p[p==pressure_level])[0]
+            level = pressure_level
         else:
             cslice = cube[0]
-            level = cube.coord('pressure').points[0]
+            level = p.points[0]
     else:
         cslice = cube
         level = 'surface'
-    
+        
 
     fig = plt.figure()
-
+    
+    log.info('Preparing plot for %s at level %s' % (cslice.name(), level))
     ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
     ax.coastlines()
     fig.add_axes(ax)
-
+             
     gl = ax.gridlines(draw_labels=True)
     gl.xlabels_top = False
     gl.ylabels_right = False
@@ -115,10 +123,29 @@ def plot_cube(cube, pressure_level=None):
     cb = plt.colorbar(contours, orientation='horizontal')
     cb.ax.set_xlabel(cslice.units)
     cb.ax.set_aspect(0.03)
-
+             
     ax.set_xlabel('longitude')
     ax.set_ylabel('latitude')
     ax.set_title('%s (level: %s)' % (cslice.name(), level))
-
+             
     return fig
 
+
+
+def plot_cast_file(filename, outdir='.'):
+    cubes = iris.load(filename, callback=_metadata_callback)
+
+    for cube in cubes:
+        plot_name = cube.name().lower().replace(' ', '_') + '.png'
+
+        #!TODO: Configure pressure level
+        fig = plot_and_save(cube, plot_name)
+
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
+    import sys
+    cubes_file, = sys.argv[1:]
+
+    plot_cast_file(cubes_file)
