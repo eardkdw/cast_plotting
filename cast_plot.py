@@ -8,6 +8,9 @@ import cartopy.crs as ccrs
 import iris
 import iris.plot as iplt
 
+import matplotlib.ticker as mticker
+from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+
 #
 # {GRIB_ID: (standard_name, long_name, units)
 #
@@ -63,6 +66,14 @@ def load_cubes(filename):
     return cubes
 
 
+def plot_and_save(cube, out_filename, pressure_level=None, format=None):
+    fig = plot_cube(cube, pressure_level)
+
+    # Reasonable values for balancing plot and colourbar
+    fig.set_size_inches(10, 7)
+    fig.savefig(out_filename, format=format)
+
+
 def plot_cube(cube, pressure_level=None):
 
     # Detect whether the cube is 2D or 3D
@@ -87,20 +98,27 @@ def plot_cube(cube, pressure_level=None):
         level = 'surface'
     
 
-    #plot = qplt.contourf(cslice)
-    #ax = plot.ax
+    fig = plt.figure()
 
-    ax_proj = ccrs.PlateCarree(central_longitude=180)
-    ax = plt.axes(projection=ax_proj)
+    ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
     ax.coastlines()
-    ax.gridlines(draw_labels=True)
-    iplt.contourf(cslice, axes=ax)
+    fig.add_axes(ax)
 
-    #ax.set_aspect('auto')
-    #ax.set_xlim(80, 240)
-    #ax.set_ylim(-40, 40)
+    gl = ax.gridlines(draw_labels=True)
+    gl.xlabels_top = False
+    gl.ylabels_right = False
+    gl.xformatter = LONGITUDE_FORMATTER
+    gl.yformatter = LATITUDE_FORMATTER
+    gl.xlocator = mticker.FixedLocator([100, 140, 180, -140])
+    
+    contours = iplt.contourf(cslice, axes=ax)
+    cb = plt.colorbar(contours, orientation='horizontal')
+    cb.ax.set_xlabel(cslice.units)
+    cb.ax.set_aspect(0.03)
 
-    #!TODO: adjust viewport
+    ax.set_xlabel('longitude')
+    ax.set_ylabel('latitude')
+    ax.set_title('%s (level: %s)' % (cslice.name(), level))
 
+    return fig
 
-    return ax
