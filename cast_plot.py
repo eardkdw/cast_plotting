@@ -1,5 +1,9 @@
 
 import re
+
+import matplotlib
+matplotlib.use('Agg')
+
 from iris.unit import Unit
 
 import matplotlib.pyplot as plt
@@ -14,61 +18,64 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import logging
 log = logging.getLogger(__name__)
 
-#
-# {GRIB_ID: (standard_name, long_name, units)
-#
-standard_name_map = {
-    1: ('atmosphere_horizontal_streamfunction', None, 'm2 s-1'), # Stream function, strf, m2 s-1
-    34: ('sea_surface_temperature', None, 'K'), # Sea surface temperature, sst, K
-    59: ('atmosphere_specific_convective_available_potential_energy', None, 'J kg-1'), # Convective available potential energy, cape, J kg-1
-    60: ('ertel_potential_vorticity', None, 'K m2 kg-1 s-1'),
-    130: ('air_temperature', None, 'K'), # Temperature, t, K
-    131: ('eastward_wind', None, 'm s-1'), # U component of wind, u, m s-1
-    132: ('northward_wind', None, 'm s-1'), # V component of wind, v, m s-1
-    133: ('specific_humidity', None, 'kg kg-1'), # Specific humidity, q, kj kj-1
-    135: ('lagrangian_tendency_of_air_pressure', None, 'Pa s-1'), # Vertical velocity, w, Pa s-1
-    138: ('atmosphere_relative_vorticity', None, 's-1'), # Vorticity (relative), vo, s-1
-    142: ('lwe_thickness_of_large_scale_precipitation_amount', None, 'm'), # Large-scale precipitation, lsp, m
-    143: ('lwe_thickness_of_convective_precipitation_amount', None, 'm'), # Convective precipitation, cp, m
-    155: ('divergence_of_wind', None, 's-1'), # Divergence, d, s-1
-    156: ('geopotential_height', None, None), # Geopotential Height, gh, gpm
-    157: ('relative_humidity', None, '%'), # Relative humidity, r, %
-    159: ('atmospheric_boundary_layer_thickness', None, 'm'), # Boundary layer height, blh, m
-    186: ('cloud_area_fraction', None, '1'), # Low cloud cover, lcc, (0-1)
-    151: ('air_pressure_at_sea_level', None, 'Pa'), # Top net radiation, tnr, W m-2
-    165: (None, '10 METER U WIND COMPONENT', 'm s-1'), # 10 meter U wind component, 10u, m s-1
-    166: (None, '10 METER V WIND COMPONENT', 'm s-1'), # 10 meter V wind component, 10v, m s-1
-    167: (None, '2 METER TEMPERATURE', 'K'), # 2 meter temperature, 2t, K
-    168: (None, '2 METER DEWPOINT TEMPERATURE', 'K'), # 2 meter dwepoint temperature, 2d, K
-    187: (None, 'MEDIUM CLOUD COVER', '1'), # Medium cloud cover, lcc, (0-1)
-    188: (None, 'HIGH CLOUD COVER', '1'), # High cloud cover, hcc, (0-1)
-    206: (None, 'TOTAL COLUMN OZONE', 'kg m-2'), # Total column ozone, tco3, kg m-2
-    228: (None, 'HUMIDITY TENDENCY BY LARGE SCALE CONDENSATION', 'kg kg-1'), # Humidity tendency by large-scale condensation, htlc, kg kg-1
-}
+
+class GribMapping(object):
+    def __init__(self):
+        self._grib_id_map = {}
+
+    def add(self, grib_id, standard_name, long_name, units):
+        self._grib_id_map[grib_id] = (standard_name, long_name, units)
+    
+    def _metadata_callback(self, cube, field, filename):
+        match = re.match(r'UNKNOWN LOCAL PARAM (\d+)\.(\d+)', cube.long_name)
+        if match:
+            parameter, table_version = (int(x) for x in match.groups())
+            if parameter in self._grib_id_map:
+                standard_name, long_name, unit = self._grib_id_map[parameter]
+                if standard_name:
+                    cube.long_name = standard_name
+                if long_name:
+                    cube.long_name = long_name
+                if unit:
+                    cube.units = Unit(unit)
+
+    def load_cubes(self, filename):
+        cubes = iris.load(filename, callback=self._metadata_callback)
+        
+        return cubes
+
+
+grib_mapping = GribMapping()
+
+grib_mapping.add(1, 'atmosphere_horizontal_streamfunction', None, 'm2 s-1') # Stream function, strf, m2 s-1
+grib_mapping.add(34, 'sea_surface_temperature', None, 'K') # Sea surface temperature, sst, K
+grib_mapping.add(59, 'atmosphere_specific_convective_available_potential_energy', None, 'J kg-1') # Convective available potential energy, cape, J kg-1
+grib_mapping.add(60, 'ertel_potential_vorticity', None, 'K m2 kg-1 s-1')
+grib_mapping.add(130, 'air_temperature', None, 'K') # Temperature, t, K
+grib_mapping.add(131, 'eastward_wind', None, 'm s-1') # U component of wind, u, m s-1
+grib_mapping.add(132, 'northward_wind', None, 'm s-1') # V component of wind, v, m s-1
+grib_mapping.add(133, 'specific_humidity', None, 'kg kg-1') # Specific humidity, q, kj kj-1
+grib_mapping.add(135, 'lagrangian_tendency_of_air_pressure', None, 'Pa s-1') # Vertical velocity, w, Pa s-1
+grib_mapping.add(138, 'atmosphere_relative_vorticity', None, 's-1') # Vorticity (relative), vo, s-1
+grib_mapping.add(142, 'lwe_thickness_of_large_scale_precipitation_amount', None, 'm') # Large-scale precipitation, lsp, m
+grib_mapping.add(143, 'lwe_thickness_of_convective_precipitation_amount', None, 'm') # Convective precipitation, cp, m
+grib_mapping.add(155, 'divergence_of_wind', None, 's-1') # Divergence, d, s-1
+grib_mapping.add(156, 'geopotential_height', None, None) # Geopotential Height, gh, gpm
+grib_mapping.add(157, 'relative_humidity', None, '%') # Relative humidity, r, %
+grib_mapping.add(159, 'atmospheric_boundary_layer_thickness', None, 'm') # Boundary layer height, blh, m
+grib_mapping.add(186, 'cloud_area_fraction', None, '1') # Low cloud cover, lcc, (0-1)
+grib_mapping.add(151, 'air_pressure_at_sea_level', None, 'Pa') # Top net radiation, tnr, W m-2
+grib_mapping.add(165, None, '10 METER U WIND COMPONENT', 'm s-1') # 10 meter U wind component, 10u, m s-1
+grib_mapping.add(166, None, '10 METER V WIND COMPONENT', 'm s-1') # 10 meter V wind component, 10v, m s-1
+grib_mapping.add(167, None, '2 METER TEMPERATURE', 'K') # 2 meter temperature, 2t, K
+grib_mapping.add(168, None, '2 METER DEWPOINT TEMPERATURE', 'K') # 2 meter dwepoint temperature, 2d, K
+grib_mapping.add(187, None, 'MEDIUM CLOUD COVER', '1') # Medium cloud cover, lcc, (0-1)
+grib_mapping.add(188, None, 'HIGH CLOUD COVER', '1') # High cloud cover, hcc, (0-1)
+grib_mapping.add(206, None, 'TOTAL COLUMN OZONE', 'kg m-2') # Total column ozone, tco3, kg m-2
+grib_mapping.add(228, None, 'HUMIDITY TENDENCY BY LARGE SCALE CONDENSATION', 'kg kg-1') # Humidity tendency by large-scale condensation, htlc, kg kg-1
 
 
 
-param_rexp = re.compile(r'UNKNOWN LOCAL PARAM (\d+)\.(\d+)')
-
-def _metadata_callback(cube, field, filename):
-    match = param_rexp.match(cube.long_name)
-    if match:
-        parameter, table_version = (int(x) for x in match.groups())
-        if parameter in standard_name_map:
-            standard_name, long_name, unit = standard_name_map[parameter]
-            if standard_name:
-                cube.long_name = standard_name
-            if long_name:
-                cube.long_name = long_name
-            if unit:
-                cube.units = Unit(unit)
-
-
-
-def load_cubes(filename):
-    cubes = iris.load(filename, callback=_metadata_callback)
-
-    return cubes
 
 
 def plot_and_save(cube, out_filename, pressure_level=None, format=None):
@@ -131,12 +138,30 @@ def plot_cube(cube, pressure_level=None):
     return fig
 
 
+CAST_STANDARD_NAMES = [
+    'relative_humidity',
+    'air_temperature',
+    'atmosphere_relative_vorticity',
+    'geopotential_height',
+    'eastward_wind',
+    'northward_wind',
+]
+CAST_LONG_NAMES = [
+  '10 METER U WIND COMPONENT',
+  '10 METER V WIND COMPONENT',
+  '2 METER TEMPERATURE',
+]
 
 def plot_cast_file(filename, outdir='.'):
-    cubes = iris.load(filename, callback=_metadata_callback)
+    cubes = grib_mapping.load_cubes(filename)
 
     for cube in cubes:
-        plot_name = cube.name().lower().replace(' ', '_') + '.png'
+        name = cube.name()
+        if ((name not in CAST_STANDARD_NAMES) and
+            (name not in CAST_LONG_NAMES)):
+            continue
+
+        plot_name = name.lower().replace(' ', '_') + '.png'
 
         #!TODO: Configure pressure level
         fig = plot_and_save(cube, plot_name)
