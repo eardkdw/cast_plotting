@@ -27,9 +27,14 @@ class GribMapping(object):
         self._grib_id_map[grib_id] = (standard_name, long_name, units)
     
     def _metadata_callback(self, cube, field, filename):
+        # Use IRIS values when present
+        if cube.standard_name:
+            return
+
         match = re.match(r'UNKNOWN LOCAL PARAM (\d+)\.(\d+)', cube.long_name)
         if match:
             parameter, table_version = (int(x) for x in match.groups())
+            log.debug('Cube "{0}" --> {1}.{2}'.format(cube.long_name, parameter, table_version))
             if parameter in self._grib_id_map:
                 standard_name, long_name, unit = self._grib_id_map[parameter]
                 if standard_name:
@@ -38,6 +43,8 @@ class GribMapping(object):
                     cube.long_name = long_name
                 if unit:
                     cube.units = Unit(unit)
+            else:
+                log.error('Grib Parameter {0} not in grib mapping'.format(parameter))
 
     def load_cubes(self, filename):
         cubes = iris.load(filename, callback=self._metadata_callback)
@@ -145,6 +152,8 @@ CAST_STANDARD_NAMES = [
     'geopotential_height',
     'eastward_wind',
     'northward_wind',
+    'x_wind',
+    'y_wind',
 ]
 CAST_LONG_NAMES = [
   '10 METER U WIND COMPONENT',
@@ -155,20 +164,21 @@ CAST_LONG_NAMES = [
 def plot_cast_file(filename, outdir='.'):
     cubes = grib_mapping.load_cubes(filename)
 
-    for cube in cubes:
-        name = cube.name()
-        if ((name not in CAST_STANDARD_NAMES) and
-            (name not in CAST_LONG_NAMES)):
+    for i, cube in enumerate(cubes):
+        if ((cube.standard_name not in CAST_STANDARD_NAMES) and
+            (cube.long_name not in CAST_LONG_NAMES)):
+            log.info('Skipping cube {0} ({1})'.format(cube.name(), cube.long_name))
             continue
 
-        plot_name = name.lower().replace(' ', '_') + '.png'
+        plot_name = '{0}_{1}.png'.format(cube.name().lower().replace(' ', '_'), 
+                                         i)
 
         #!TODO: Configure pressure level
         fig = plot_and_save(cube, plot_name)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     import sys
     cubes_file, = sys.argv[1:]
