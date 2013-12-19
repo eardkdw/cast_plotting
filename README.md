@@ -24,5 +24,5 @@ This code is designed to run on a system using the [JASMIN Analysis Platform][2]
  4. Better annotation of plots
 
 
-[1] http://www.faam.ac.uk/index.php/current-future-campaigns/384-cast-2014-co-ordinated-airborne-studies-in-the-tropics
-[2] http://proj.badc.rl.ac.uk/cedaservices/wiki/JASMIN/AnalysisPlatform
+[1]: http://www.faam.ac.uk/index.php/current-future-campaigns/384-cast-2014-co-ordinated-airborne-studies-in-the-tropics
+[2]: http://proj.badc.rl.ac.uk/cedaservices/wiki/JASMIN/AnalysisPlatform
