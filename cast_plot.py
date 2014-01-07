@@ -1,4 +1,5 @@
-
+#!/usr/bin/python2.7
+# vim: et:ts=4
 import re
 
 import matplotlib
@@ -18,7 +19,7 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import logging
 log = logging.getLogger(__name__)
 
-import os, sys, getopt
+import os, sys, argparse
 
 class GribMapping(object):
     def __init__(self):
@@ -177,45 +178,23 @@ def plot_cast_file(filename, outdir='.'):
         #!TODO: Configure pressure level
         fig = plot_and_save(cube, os.path.join(outdir,plot_name))
 
-def usage():
-    print '''usage: python2.7 cast_plot.py [-h | --help] [-d | --debug] [-o | --outdir OUTDIR ] file
-    positional arguments:
-        file        A GRIB file to be processed
-
-    Optional arguments:
-        -h, --help              show this help message and exit
-        -d, --debug             show debug logs
-        -o, --outdir OUTDIR     Output directory. Must be writable by the current user.
-    '''
-
-
 if __name__ == '__main__':
-    try:
-        opts, args = getopt.getopt(sys.argv[1:],'hdo:',['help','debug','outdir='])
-    except getopt.GetoptError as err:
-        print str(err);
-        usage()
-        sys.exit(2)
-    #defaults
-    outdir = '.'
-    level=logging.WARNING
-   
-    for o, a in opts:
-        if o in ("-h", "--help"):
-            usage()
-            sys.exit()
-        elif o in ("-d", "--debug"):
-            level=logging.DEBUG 
-        elif o in ("-o", "--outdir"):
-            outdir = a
-        else:
-            assert False, "unhandled option" 
-    
-    logging.basicConfig(level=level)
-    #os.access is technically vulnerable to TOCTOU errors, but...
-    if(not os.access(a, os.W_OK)):
-        log.error("directory '" + a +"' is not writable")
-        sys.exit(2)
-    cubes_file, = args[0:]
+    parser = argparse.ArgumentParser(description="Processes GRIB files for the CAST project")
+    parser.add_argument('file', help='GRIB file to be processed')
+    parser.add_argument("-d", "--debug",  action='store_true', help='Turn on debugging')
+    parser.add_argument("-o", "--outdir", default='.', help='Output directory')
 
-    plot_cast_file(cubes_file, outdir)
+    args = parser.parse_args()
+   
+    if(args.debug):
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING)
+        
+    #os.access is technically vulnerable to TOCTOU errors, but...
+    if(not os.access(args.outdir, os.W_OK)):
+        log.error("directory '" + args.outdir +"' is not writable")
+        sys.exit(2)
+    cubes_file = args.file
+
+    plot_cast_file(cubes_file, args.outdir)
