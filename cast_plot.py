@@ -19,8 +19,6 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import logging
 log = logging.getLogger(__name__)
 
-import os, sys, argparse
-
 class GribMapping(object):
     def __init__(self):
         self._grib_id_map = {}
@@ -172,16 +170,25 @@ def plot_cast_file(filename, outdir='.'):
             log.info('Skipping cube {0} ({1})'.format(cube.name(), cube.long_name))
             continue
 
-        plot_name = '{0}_{1}.png'.format(cube.name().lower().replace(' ', '_'), 
-                                         i)
+        #convert cube's time to string (no colons because of Windows)
+        cubetime = cube.coord('time').units.num2date(cube.coord('time').points[0]).strftime('%Y-%m-%d_%H%M%S')
+        plot_name = '{0}_{2}_{1}.png'.format(cube.name().lower().replace(' ', '_'), 
+                                         i,
+                                cubetime)
 
         #!TODO: Configure pressure level
         fig = plot_and_save(cube, os.path.join(outdir,plot_name))
 
 if __name__ == '__main__':
+    import os, sys, argparse
+
+    #define arguments for command line
     parser = argparse.ArgumentParser(description="Processes GRIB files for the CAST project")
+    #exactly one filename
     parser.add_argument('file', help='GRIB file to be processed')
+    #debug output off by default
     parser.add_argument("-d", "--debug",  action='store_true', help='Turn on debugging')
+    #output directory.
     parser.add_argument("-o", "--outdir", default='.', help='Output directory')
 
     args = parser.parse_args()
@@ -190,7 +197,8 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.WARNING)
-        
+    
+    #check output dir is writable.
     #os.access is technically vulnerable to TOCTOU errors, but...
     if(not os.access(args.outdir, os.W_OK)):
         log.error("directory '" + args.outdir +"' is not writable")
