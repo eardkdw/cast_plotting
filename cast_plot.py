@@ -86,16 +86,15 @@ grib_mapping.add(228, None, 'HUMIDITY TENDENCY BY LARGE SCALE CONDENSATION', 'kg
 
 
 def plot_and_save(cube, out_filename, pressure_level=None, format=None):
-    fig = plot_cube(cube, pressure_level)
+    fig, metadata = plot_cube(cube, pressure_level)
 
     # Reasonable values for balancing plot and colourbar
     fig.set_size_inches(10, 7)
     fig.savefig(out_filename, format=format)
     log.info('Saving figure %s' % out_filename)
 
-
-def plot_cube(cube, pressure_level=None):
-
+def cube_level(cube, pressure_level=None):
+    level = None
     # Detect whether the cube is 2D or 3D
     coord_names = [d.name() for d in cube.dim_coords]
     if len(coord_names) == 3:
@@ -104,6 +103,7 @@ def plot_cube(cube, pressure_level=None):
     else:
         assert len(coord_names) == 2
         is_3d = False
+
 
     # Select slice
     if is_3d:
@@ -117,11 +117,21 @@ def plot_cube(cube, pressure_level=None):
     else:
         cslice = cube
         level = 'surface'
-        
+
+    return level, is_3d, cslice
+
+
+def plot_cube(cube, pressure_level=None):
+
+    metadata = {}
+    level, is_3d, cslice = cube_level(cube)
+    metadata['is_3d'] = is_3d 
+    metadata['pressure_level'] = level 
 
     fig = plt.figure()
     
     log.info('Preparing plot for %s at level %s' % (cslice.name(), level))
+    metadata['name'] = cslice.name() 
     ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
     ax.coastlines()
     fig.add_axes(ax)
@@ -140,9 +150,10 @@ def plot_cube(cube, pressure_level=None):
              
     ax.set_xlabel('longitude')
     ax.set_ylabel('latitude')
-    ax.set_title('%s (level: %s)' % (cslice.name(), level))
+    metadata['time'] = cube.coord('time').units.num2date(cube.coord('time').points[0]).strftime('%Y-%m-%d_%H:%M:%S')
+    ax.set_title('%s %s (level: %s)' % (cslice.name(), metadata['time'], level))
              
-    return fig
+    return fig, metadata
 
 
 CAST_STANDARD_NAMES = [
@@ -172,9 +183,10 @@ def plot_cast_file(filename, outdir='.'):
 
         #convert cube's time to string (no colons because of Windows)
         cubetime = cube.coord('time').units.num2date(cube.coord('time').points[0]).strftime('%Y-%m-%d_%H%M%S')
-        plot_name = '{0}_{2}_{1}.png'.format(cube.name().lower().replace(' ', '_'), 
+        cubelevel, is_3d, cslice = cube_level(cube)
+        plot_name = '{0}_{2}_{1}_{3}.png'.format(cube.name().lower().replace(' ', '_'), 
                                          i,
-                                cubetime)
+                                cubetime, cubelevel)
 
         #!TODO: Configure pressure level
         fig = plot_and_save(cube, os.path.join(outdir,plot_name))
