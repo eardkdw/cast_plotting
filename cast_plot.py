@@ -109,7 +109,9 @@ def cube_level(cube, pressure_level=None):
     if is_3d:
         p = cube.coord('pressure')
         if pressure_level:
-            cslice = cube.subset(p[p==pressure_level])[0]
+            log.info('Cube has multiple pressure levels')
+            #cslice = cube.subset(p[p==pressure_level])[0]
+            cslice = cube.extract(iris.Constraint(pressure=pressure_level))
             level = pressure_level
         else:
             cslice = cube[0]
@@ -124,7 +126,7 @@ def cube_level(cube, pressure_level=None):
 def plot_cube(cube, pressure_level=None):
 
     metadata = {}
-    level, is_3d, cslice = cube_level(cube)
+    level, is_3d, cslice = cube_level(cube, pressure_level)
     metadata['is_3d'] = is_3d 
     metadata['pressure_level'] = level 
 
@@ -184,12 +186,19 @@ def plot_cast_file(filename, outdir='.'):
         #convert cube's time to string (no colons because of Windows)
         cubetime = cube.coord('time').units.num2date(cube.coord('time').points[0]).strftime('%Y-%m-%d_%H%M%S')
         cubelevel, is_3d, cslice = cube_level(cube)
-        plot_name = '{0}_{2}_{1}_{3}.png'.format(cube.name().lower().replace(' ', '_'), 
+        #if 3d, iterate through pressure levels
+        if is_3d:
+            for each in cube.coord('pressure').points:
+                plot_name = '{0}_{2}_{1}_{3}.png'.format(cube.name().lower().replace(' ', '_'), 
+                                         i,
+                                cubetime, each)
+                fig = plot_and_save(cube, os.path.join(outdir,plot_name), each)
+        else:
+            plot_name = '{0}_{2}_{1}_{3}.png'.format(cube.name().lower().replace(' ', '_'), 
                                          i,
                                 cubetime, cubelevel)
 
-        #!TODO: Configure pressure level
-        fig = plot_and_save(cube, os.path.join(outdir,plot_name))
+            fig = plot_and_save(cube, os.path.join(outdir,plot_name))
 
 if __name__ == '__main__':
     import os, sys, argparse
