@@ -1,4 +1,5 @@
-
+#!/usr/bin/python2.7
+# vim: et:ts=4
 import re
 
 import matplotlib
@@ -17,7 +18,6 @@ from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 
 import logging
 log = logging.getLogger(__name__)
-
 
 class GribMapping(object):
     def __init__(self):
@@ -86,16 +86,15 @@ grib_mapping.add(228, None, 'HUMIDITY TENDENCY BY LARGE SCALE CONDENSATION', 'kg
 
 
 def plot_and_save(cube, out_filename, pressure_level=None, format=None):
-    fig = plot_cube(cube, pressure_level)
+    fig, metadata = plot_cube(cube, pressure_level)
 
     # Reasonable values for balancing plot and colourbar
     fig.set_size_inches(10, 7)
     fig.savefig(out_filename, format=format)
     log.info('Saving figure %s' % out_filename)
 
-
-def plot_cube(cube, pressure_level=None):
-
+def cube_level(cube, pressure_level=None):
+    level = None
     # Detect whether the cube is 2D or 3D
     coord_names = [d.name() for d in cube.dim_coords]
     if len(coord_names) == 3:
@@ -105,11 +104,14 @@ def plot_cube(cube, pressure_level=None):
         assert len(coord_names) == 2
         is_3d = False
 
+
     # Select slice
     if is_3d:
         p = cube.coord('pressure')
         if pressure_level:
-            cslice = cube.subset(p[p==pressure_level])[0]
+            log.info('Cube has multiple pressure levels')
+            #cslice = cube.subset(p[p==pressure_level])[0]
+            cslice = cube.extract(iris.Constraint(pressure=pressure_level))
             level = pressure_level
         else:
             cslice = cube[0]
@@ -117,11 +119,21 @@ def plot_cube(cube, pressure_level=None):
     else:
         cslice = cube
         level = 'surface'
-        
+
+    return level, is_3d, cslice
+
+
+def plot_cube(cube, pressure_level=None):
+
+    metadata = {}
+    level, is_3d, cslice = cube_level(cube, pressure_level)
+    metadata['is_3d'] = is_3d 
+    metadata['pressure_level'] = level 
 
     fig = plt.figure()
     
     log.info('Preparing plot for %s at level %s' % (cslice.name(), level))
+    metadata['name'] = cslice.name() 
     ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180))
     ax.coastlines()
     fig.add_axes(ax)
@@ -140,14 +152,16 @@ def plot_cube(cube, pressure_level=None):
              
     ax.set_xlabel('longitude')
     ax.set_ylabel('latitude')
-    ax.set_title('%s (level: %s)' % (cslice.name(), level))
+    metadata['time'] = cube.coord('time').units.num2date(cube.coord('time').points[0]).strftime('%Y-%m-%d_%H:%M:%S')
+    ax.set_title('%s %s (level: %s)' % (cslice.name(), metadata['time'], level))
              
-    return fig
+    return fig, metadata
 
 
 CAST_STANDARD_NAMES = [
     'relative_humidity',
     'air_temperature',
+    'air_pressure_at_sea_level',
     'atmosphere_relative_vorticity',
     'geopotential_height',
     'eastward_wind',
@@ -165,22 +179,52 @@ def plot_cast_file(filename, outdir='.'):
     cubes = grib_mapping.load_cubes(filename)
 
     for i, cube in enumerate(cubes):
-        if ((cube.standard_name not in CAST_STANDARD_NAMES) and
+        if ((cube.name() not in CAST_STANDARD_NAMES) and
             (cube.long_name not in CAST_LONG_NAMES)):
             log.info('Skipping cube {0} ({1})'.format(cube.name(), cube.long_name))
             continue
 
-        plot_name = '{0}_{1}.png'.format(cube.name().lower().replace(' ', '_'), 
-                                         i)
+        #convert cube's time to string (no colons because of Windows)
+        cubetime = cube.coord('time').units.num2date(cube.coord('time').points[0]).strftime('%Y-%m-%d_%H%M%S')
+        cubelevel, is_3d, cslice = cube_level(cube)
+        #if 3d, iterate through pressure levels
+        if is_3d:
+            for each in cube.coord('pressure').points:
+                plot_name = '{0}_{2}_{1}_{3}.png'.format(cube.name().lower().replace(' ', '_'), 
+                                         i,
+                                cubetime, each)
+                fig = plot_and_save(cube, os.path.join(outdir,plot_name), each)
+        else:
+            plot_name = '{0}_{2}_{1}_{3}.png'.format(cube.name().lower().replace(' ', '_'), 
+                                         i,
+                                cubetime, cubelevel)
 
-        #!TODO: Configure pressure level
-        fig = plot_and_save(cube, plot_name)
-
+            fig = plot_and_save(cube, os.path.join(outdir,plot_name))
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    import os, sys, argparse
 
-    import sys
-    cubes_file, = sys.argv[1:]
+    #define arguments for command line
+    parser = argparse.ArgumentParser(description="Processes GRIB files for the CAST project")
+    #exactly one filename
+    parser.add_argument('file', help='GRIB file to be processed')
+    #debug output off by default
+    parser.add_argument("-d", "--debug",  action='store_true', help='Turn on debugging')
+    #output directory.
+    parser.add_argument("-o", "--outdir", default='.', help='Output directory')
 
-    plot_cast_file(cubes_file)
+    args = parser.parse_args()
+   
+    if(args.debug):
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING)
+    
+    #check output dir is writable.
+    #os.access is technically vulnerable to TOCTOU errors, but...
+    if(not os.access(args.outdir, os.W_OK)):
+        log.error("directory '" + args.outdir +"' is not writable")
+        sys.exit(2)
+    cubes_file = args.file
+
+    plot_cast_file(cubes_file, args.outdir)
